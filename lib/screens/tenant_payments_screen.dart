@@ -77,15 +77,12 @@ class _TenantPaymentsScreenState extends State<TenantPaymentsScreen> {
       existingPayments = existingPayments.where((p) => p.tenantId == widget.tenant.id).toList();
     }
     
-    // Générer tous les mois depuis la date d'entrée jusqu'à 12 mois dans le futur
     final now = DateTime.now();
     final startDate = widget.tenant.startDate;
     final payments = <Payment>[];
     
-    // Mois depuis l'entrée jusqu'à aujourd'hui
     DateTime current = DateTime(startDate.year, startDate.month, 5);
     while (current.isBefore(DateTime(now.year, now.month + 12, 5))) {
-      final isPast = current.isBefore(DateTime(now.year, now.month, 5));
       final existingPayment = existingPayments.firstWhere(
         (p) => p.dueDate.year == current.year && p.dueDate.month == current.month,
         orElse: () => Payment(
@@ -97,7 +94,7 @@ class _TenantPaymentsScreenState extends State<TenantPaymentsScreen> {
           lotName: 'Lot ${widget.tenant.lotId}',
           amount: _monthlyRent,
           dueDate: current,
-          status: isPast ? 'pending' : 'pending',
+          status: 'pending',
         ),
       );
       
@@ -338,6 +335,88 @@ class _TenantPaymentsScreenState extends State<TenantPaymentsScreen> {
                 onPressed: () => Navigator.pop(context),
                 child: Text(
                   'Plus tard',
+                  style: GoogleFonts.urbanist(color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _viewReceipt(Payment payment) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt, size: 60, color: Color(0xFF1E88E5)),
+              const SizedBox(height: 16),
+              Text(
+                'Quittance de loyer',
+                style: GoogleFonts.urbanist(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Période : ${_formatMonth(payment.dueDate)}',
+                style: GoogleFonts.urbanist(fontSize: 16),
+              ),
+              Text(
+                'Montant : ${payment.formattedAmount}',
+                style: GoogleFonts.urbanist(fontSize: 14, color: Colors.grey),
+              ),
+              Text(
+                'Payé le : ${payment.paymentDate!.day}/${payment.paymentDate!.month}/${payment.paymentDate!.year}',
+                style: GoogleFonts.urbanist(fontSize: 14, color: Colors.green),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSendButton(
+                      icon: Icons.picture_as_pdf,
+                      label: 'Voir PDF',
+                      color: Colors.red,
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final pdfBytes = await PdfService.generateReceiptBytes(payment);
+                        PdfService.openInNewTab(payment, pdfBytes);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildSendButton(
+                      icon: Icons.share,
+                      label: 'Partager',
+                      color: Colors.blue,
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final pdfBytes = await PdfService.generateReceiptBytes(payment);
+                        await Share.shareXFiles(
+                          [XFile.fromData(pdfBytes, name: 'quittance.pdf', mimeType: 'application/pdf')],
+                          text: 'Quittance de loyer - ${_formatMonth(payment.dueDate)}',
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Fermer',
                   style: GoogleFonts.urbanist(color: Colors.grey),
                 ),
               ),
@@ -608,6 +687,14 @@ class _TenantPaymentsScreenState extends State<TenantPaymentsScreen> {
                           color: Colors.grey,
                         ),
                       ),
+                      if (isPaid && payment.paymentDate != null)
+                        Text(
+                          'Payé le ${payment.paymentDate!.day}/${payment.paymentDate!.month}/${payment.paymentDate!.year}',
+                          style: GoogleFonts.urbanist(
+                            fontSize: 10,
+                            color: Colors.green,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -626,14 +713,22 @@ class _TenantPaymentsScreenState extends State<TenantPaymentsScreen> {
                     ),
                   ),
                 ),
-                if (!isPaid)
+                if (isPaid) ...[
                   const SizedBox(width: 8),
-                if (!isPaid)
+                  IconButton(
+                    icon: const Icon(Icons.receipt, color: Color(0xFF1E88E5)),
+                    onPressed: () => _viewReceipt(payment),
+                    tooltip: 'Voir la quittance',
+                  ),
+                ],
+                if (!isPaid) ...[
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.payment, color: Colors.green),
                     onPressed: () => _validatePayment(payment),
                     tooltip: 'Valider le paiement',
                   ),
+                ],
               ],
             ),
           ),
