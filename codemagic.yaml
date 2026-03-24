@@ -7,8 +7,6 @@ workflows:
       xcode: latest
       vars:
         BUNDLE_ID: "com.hentatizied.monappcompteur"
-        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
-        XCODE_SCHEME: "Runner"
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
@@ -16,8 +14,8 @@ workflows:
         script: |
           cd ios
           pod install
-      - name: Build IPA
+      - name: Build unsigned app
         script: |
-          flutter build ios --release
+          flutter build ios --release --no-codesign
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/iphoneos/Runner.app
