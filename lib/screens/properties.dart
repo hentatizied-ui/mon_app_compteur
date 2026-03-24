@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PropertiesScreen extends StatefulWidget {
   const PropertiesScreen({super.key});
@@ -9,41 +11,103 @@ class PropertiesScreen extends StatefulWidget {
 }
 
 class _PropertiesScreenState extends State<PropertiesScreen> {
-  final List<Map<String, dynamic>> _properties = [
-    {
-      'id': '1',
-      'name': 'Appartement Centre Ville',
-      'address': '15 rue de Paris, 75001 Paris',
-      'rent': 1200,
-      'rooms': 3,
-      'area': 65,
-      'status': 'Occupé',
-      'image': '🏢',
-      'type': 'Appartement',
-    },
-    {
-      'id': '2',
-      'name': 'Maison avec Jardin',
-      'address': '8 avenue des Roses, 69002 Lyon',
-      'rent': 1800,
-      'rooms': 5,
-      'area': 110,
-      'status': 'Libre',
-      'image': '🏠',
-      'type': 'Maison',
-    },
-    {
-      'id': '3',
-      'name': 'Studio Étudiant',
-      'address': '3 rue de la Gare, 13001 Marseille',
-      'rent': 550,
-      'rooms': 1,
-      'area': 25,
-      'status': 'Occupé',
-      'image': '🏢',
-      'type': 'Studio',
-    },
-  ];
+  List<Map<String, dynamic>> _properties = [];
+
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _rentController = TextEditingController();
+  final TextEditingController _roomsController = TextEditingController();
+  final TextEditingController _areaController = TextEditingController();
+  final TextEditingController _typeController = TextEditingController();
+
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProperties();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    _rentController.dispose();
+    _roomsController.dispose();
+    _areaController.dispose();
+    _typeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProperties() async {
+    print('=== CHARGEMENT DES BIENS ===');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? propertiesJson = prefs.getString('properties');
+      
+      print('Données chargées: $propertiesJson');
+      
+      if (propertiesJson != null && propertiesJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(propertiesJson);
+        setState(() {
+          _properties = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        });
+      } else {
+        setState(() {
+          _properties = [
+            {
+              'id': '1',
+              'name': 'Appartement Centre Ville',
+              'address': '15 rue de Paris, 75001 Paris',
+              'rent': 1200,
+              'rooms': 3,
+              'area': 65,
+              'status': 'Occupé',
+              'image': '🏢',
+              'type': 'Appartement',
+            },
+            {
+              'id': '2',
+              'name': 'Maison avec Jardin',
+              'address': '8 avenue des Roses, 69002 Lyon',
+              'rent': 1800,
+              'rooms': 5,
+              'area': 110,
+              'status': 'Libre',
+              'image': '🏠',
+              'type': 'Maison',
+            },
+            {
+              'id': '3',
+              'name': 'Studio Étudiant',
+              'address': '3 rue de la Gare, 13001 Marseille',
+              'rent': 550,
+              'rooms': 1,
+              'area': 25,
+              'status': 'Occupé',
+              'image': '🏢',
+              'type': 'Studio',
+            },
+          ];
+        });
+        await _saveProperties();
+      }
+      print('Liste chargée: ${_properties.length} biens');
+    } catch (e) {
+      print('Erreur chargement: $e');
+    }
+  }
+
+  Future<void> _saveProperties() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String jsonString = jsonEncode(_properties);
+      await prefs.setString('properties', jsonString);
+      print('Sauvegarde OK: ${_properties.length} biens');
+    } catch (e) {
+      print('Erreur sauvegarde: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,13 +126,10 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
         elevation: 0,
         centerTitle: false,
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.add_circle_outline, size: 28),
-              color: const Color(0xFF1E88E5),
-              onPressed: _showAddPropertyDialog,
-            ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, size: 28),
+            color: const Color(0xFF1E88E5),
+            onPressed: _showAddPropertyDialog,
           ),
         ],
       ),
@@ -78,8 +139,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
               padding: const EdgeInsets.all(16),
               itemCount: _properties.length,
               itemBuilder: (context, index) {
-                final property = _properties[index];
-                return _buildPropertyCard(property);
+                return _buildPropertyCard(_properties[index], index);
               },
             ),
     );
@@ -125,7 +185,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
     );
   }
 
-  Widget _buildPropertyCard(Map<String, dynamic> property) {
+  Widget _buildPropertyCard(Map<String, dynamic> property, int index) {
     final isOccupied = property['status'] == 'Occupé';
     final statusColor = isOccupied ? const Color(0xFF4CAF50) : const Color(0xFFFF9800);
     final statusText = isOccupied ? 'Occupé' : 'Libre';
@@ -147,7 +207,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => _showPropertyDetails(property),
+          onTap: () => _showPropertyDetails(property, index),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -160,8 +220,6 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                       height: 60,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
                           colors: [
                             const Color(0xFF1E88E5).withOpacity(0.2),
                             const Color(0xFF1E88E5).withOpacity(0.1),
@@ -170,10 +228,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Center(
-                        child: Text(
-                          property['image'],
-                          style: const TextStyle(fontSize: 32),
-                        ),
+                        child: Text(property['image'], style: const TextStyle(fontSize: 32)),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -192,11 +247,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: Color(0xFF9E9E9E),
-                              ),
+                              const Icon(Icons.location_on, size: 14, color: Color(0xFF9E9E9E)),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
@@ -213,30 +264,21 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                           ),
                           const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF5F5F5),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               property['type'],
-                              style: GoogleFonts.urbanist(
-                                fontSize: 10,
-                                color: const Color(0xFF757575),
-                              ),
+                              style: GoogleFonts.urbanist(fontSize: 10, color: const Color(0xFF757575)),
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -257,23 +299,11 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    _buildInfoItem(
-                      icon: Icons.euro,
-                      label: 'Loyer',
-                      value: '${property['rent']} €',
-                    ),
+                    _buildInfoItem(icon: Icons.euro, label: 'Loyer', value: '${property['rent']} €'),
                     const SizedBox(width: 16),
-                    _buildInfoItem(
-                      icon: Icons.square_foot,
-                      label: 'Surface',
-                      value: '${property['area']} m²',
-                    ),
+                    _buildInfoItem(icon: Icons.square_foot, label: 'Surface', value: '${property['area']} m²'),
                     const SizedBox(width: 16),
-                    _buildInfoItem(
-                      icon: Icons.bed,
-                      label: 'Pièces',
-                      value: '${property['rooms']}',
-                    ),
+                    _buildInfoItem(icon: Icons.bed, label: 'Pièces', value: '${property['rooms']}'),
                   ],
                 ),
               ],
@@ -284,11 +314,7 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
     );
   }
 
-  Widget _buildInfoItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
+  Widget _buildInfoItem({required IconData icon, required String label, required String value}) {
     return Expanded(
       child: Row(
         children: [
@@ -297,21 +323,8 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: GoogleFonts.urbanist(
-                  fontSize: 10,
-                  color: const Color(0xFF9E9E9E),
-                ),
-              ),
-              Text(
-                value,
-                style: GoogleFonts.urbanist(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A1A1A),
-                ),
-              ),
+              Text(label, style: GoogleFonts.urbanist(fontSize: 10, color: const Color(0xFF9E9E9E))),
+              Text(value, style: GoogleFonts.urbanist(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A))),
             ],
           ),
         ],
@@ -320,135 +333,218 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
   }
 
   void _showAddPropertyDialog() {
+    _nameController.clear();
+    _addressController.clear();
+    _rentController.clear();
+    _roomsController.clear();
+    _areaController.clear();
+    _typeController.clear();
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       backgroundColor: Colors.white,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0E0E0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Ajouter un bien',
-                style: GoogleFonts.urbanist(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A1A1A),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                decoration: InputDecoration(
-                  labelText: 'Nom du bien',
-                  labelStyle: GoogleFonts.urbanist(color: const Color(0xFF757575)),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF1E88E5), width: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                decoration: InputDecoration(
-                  labelText: 'Adresse',
-                  labelStyle: GoogleFonts.urbanist(color: const Color(0xFF757575)),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF1E88E5), width: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        labelText: 'Loyer (€)',
-                        labelStyle: GoogleFonts.urbanist(color: const Color(0xFF757575)),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E0E0),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      keyboardType: TextInputType.number,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
+                    const SizedBox(height: 24),
+                    Text('Ajouter un bien', style: GoogleFonts.urbanist(fontSize: 20, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A))),
+                    const SizedBox(height: 8),
+                    Text('Remplissez les informations du bien', style: GoogleFonts.urbanist(fontSize: 14, color: const Color(0xFF757575))),
+                    const SizedBox(height: 24),
+                    
+                    TextFormField(
+                      controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: 'Surface (m²)',
-                        labelStyle: GoogleFonts.urbanist(color: const Color(0xFF757575)),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                        ),
+                        labelText: 'Nom du bien *',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      keyboardType: TextInputType.number,
+                      validator: (value) => value == null || value.isEmpty ? 'Veuillez entrer un nom' : null,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Bien ajouté !')),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E88E5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 16),
+                    
+                    TextFormField(
+                      controller: _addressController,
+                      decoration: InputDecoration(
+                        labelText: 'Adresse *',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      validator: (value) => value == null || value.isEmpty ? 'Veuillez entrer une adresse' : null,
                     ),
-                  ),
-                  child: Text(
-                    'Ajouter',
-                    style: GoogleFonts.urbanist(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                    const SizedBox(height: 16),
+                    
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _typeController,
+                            decoration: InputDecoration(
+                              labelText: 'Type',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _rentController,
+                            decoration: InputDecoration(
+                              labelText: 'Loyer (€) *',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) => value == null || value.isEmpty ? 'Requis' : null,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _areaController,
+                            decoration: InputDecoration(
+                              labelText: 'Surface (m²) *',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            keyboardType: TextInputType.number,
+                            validator: (value) => value == null || value.isEmpty ? 'Requis' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _roomsController,
+                            decoration: InputDecoration(
+                              labelText: 'Pièces',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Annuler'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _addProperty,
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5)),
+                            child: const Text('Ajouter'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  void _showPropertyDetails(Map<String, dynamic> property) {
+  void _addProperty() async {
+    if (_formKey.currentState!.validate()) {
+      final newProperty = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'name': _nameController.text,
+        'address': _addressController.text,
+        'rent': int.tryParse(_rentController.text) ?? 0,
+        'rooms': int.tryParse(_roomsController.text) ?? 1,
+        'area': int.tryParse(_areaController.text) ?? 0,
+        'status': 'Libre',
+        'image': '🏢',
+        'type': _typeController.text.isNotEmpty ? _typeController.text : 'Bien',
+      };
+
+      setState(() {
+        _properties.add(newProperty);
+      });
+      
+      await _saveProperties();
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bien ajouté avec succès !'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _deleteProperty(Map<String, dynamic> property, int index) async {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Supprimer le bien'),
+          content: Text('Voulez-vous vraiment supprimer "${property['name']}" ?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () async {
+                setState(() {
+                  _properties.removeAt(index);
+                });
+                await _saveProperties();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Bien "${property['name']}" supprimé'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              },
+              child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPropertyDetails(Map<String, dynamic> property, int index) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -487,31 +583,15 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
                       ),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Center(
-                      child: Text(property['image'], style: const TextStyle(fontSize: 32)),
-                    ),
+                    child: Center(child: Text(property['image'], style: const TextStyle(fontSize: 32))),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          property['name'],
-                          style: GoogleFonts.urbanist(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF1A1A1A),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          property['address'],
-                          style: GoogleFonts.urbanist(
-                            fontSize: 14,
-                            color: const Color(0xFF757575),
-                          ),
-                        ),
+                        Text(property['name'], style: GoogleFonts.urbanist(fontSize: 20, fontWeight: FontWeight.w600)),
+                        Text(property['address'], style: GoogleFonts.urbanist(fontSize: 14, color: const Color(0xFF757575))),
                       ],
                     ),
                   ),
@@ -522,100 +602,48 @@ class _PropertiesScreenState extends State<PropertiesScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.euro, size: 24, color: Color(0xFF1E88E5)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${property['rent']} €',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'Loyer',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 12,
-                            color: const Color(0xFF9E9E9E),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.square_foot, size: 24, color: Color(0xFF1E88E5)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${property['area']} m²',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'Surface',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 12,
-                            color: const Color(0xFF9E9E9E),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.bed, size: 24, color: Color(0xFF1E88E5)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${property['rooms']}',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'Pièces',
-                          style: GoogleFonts.urbanist(
-                            fontSize: 12,
-                            color: const Color(0xFF9E9E9E),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: _buildDetailItem('€', 'Loyer', '${property['rent']} €')),
+                  Expanded(child: _buildDetailItem('📐', 'Surface', '${property['area']} m²')),
+                  Expanded(child: _buildDetailItem('🛏️', 'Pièces', '${property['rooms']}')),
                 ],
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE0E0E0)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _deleteProperty(property, index);
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('Supprimer'),
                     ),
                   ),
-                  child: Text(
-                    'Fermer',
-                    style: GoogleFonts.urbanist(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF757575),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Fermer'),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDetailItem(String icon, String label, String value) {
+    return Column(
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 24)),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.urbanist(fontSize: 16, fontWeight: FontWeight.w600)),
+        Text(label, style: GoogleFonts.urbanist(fontSize: 12, color: const Color(0xFF9E9E9E))),
+      ],
     );
   }
 }
